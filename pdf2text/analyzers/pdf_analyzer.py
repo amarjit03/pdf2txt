@@ -233,7 +233,7 @@ class PDFAnalyzer:
             page_area = page.rect.width * page.rect.height
             text_blocks = page.get_text("dict")["blocks"]
             text_area = sum([
-                block.get("bbox", [0, 0, 0, 0])[2] * block.get("bbox", [0, 0, 0, 0])[3]
+                (block.get("bbox", [0, 0, 0, 0])[2] - block.get("bbox", [0, 0, 0, 0])[0]) * (block.get("bbox", [0, 0, 0, 0])[3] - block.get("bbox", [0, 0, 0, 0])[1])
                 for block in text_blocks 
                 if block.get("type") == 0  # Text blocks
             ])

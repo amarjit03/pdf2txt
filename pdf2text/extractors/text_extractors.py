@@ -574,10 +574,6 @@
 #             print(f"\n=== Errors ===")
 #             for error in result.errors:
 #                 print(f"  - {error}")
-#     else:
-#         print(f"Text extractor cannot handle {analysis.pdf_type.value} PDFs")
-#         print("Use OCR extractor for scanned documents")
-
 """
 Text Extractor - Direct PDF Text Extraction using PyMuPDF
 High-speed extraction for text-based PDFs with improved memory management
