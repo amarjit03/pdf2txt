@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from config import get_config
-from pdf_analyzer import PDFAnalysisResult, PDFType, ContentComplexity
+from .pdf_analyzer import PDFAnalysisResult, PDFType, ContentComplexity
 
 
 class MemoryStrategy(Enum):
