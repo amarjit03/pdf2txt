@@ -11,7 +11,7 @@ from typing import Optional
 import time
 from datetime import datetime
 
-from config import get_config
+from pdf2text.config import get_config
 
 
 class ColoredFormatter(logging.Formatter):

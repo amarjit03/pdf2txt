@@ -9,9 +9,9 @@ import logging
 import sys
 
 # Ensure the root directory is on the import path
-sys.path.append(str(Path(__file__).resolve().parent.parent))
+# sys.path.append(str(Path(__file__).resolve().parent.parent)) # Removed for packaging
 
-from config import get_config
+from pdf2text.config import get_config
 
 class PDFType(Enum):
     """PDF content types"""

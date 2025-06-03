@@ -12,10 +12,10 @@ import sys
 from pathlib import Path
 
 # Ensure the root directory is on the import path
-sys.path.append(str(Path(__file__).resolve().parent.parent))
+# sys.path.append(str(Path(__file__).resolve().parent.parent)) # Removed for packaging
 
-from config import get_config
-from .pdf_analyzer import PDFAnalysisResult, PDFType, ContentComplexity
+from pdf2text.config import get_config
+from pdf2text.analyzers.pdf_analyzer import PDFAnalysisResult, PDFType, ContentComplexity
 
 
 class MemoryStrategy(Enum):

@@ -81,11 +81,25 @@ Follow these steps to set up and run the PDF-to-Text Agent:
         source .venv/bin/activate
         ```
 
-3.  **Install Dependencies**:
-    Ensure your virtual environment is activated, then install the required Python packages:
-    ```bash
-    pip install -r requirements.txt
-    ```
+3.  **Install the Package**:
+            Ensure your virtual environment is activated. There are a couple of ways to install the `pdf2text-agent`:
+
+            *   **Editable install from local source (for development)**:
+                This is useful if you are making changes to the code. From the project's root directory:
+                ```bash
+                pip install -e .
+                ```
+            *   **Standard install from local source**:
+                From the project's root directory:
+                ```bash
+                pip install .
+                ```
+            *   **(Future) Install from PyPI**:
+                Once the package is published to the Python Package Index (PyPI), you'll be able to install it like any other package:
+                ```bash
+                # pip install pdf2text-agent # (This is a placeholder until published)
+                ```
+            Installing the package will automatically handle the dependencies listed in `pyproject.toml`. The `requirements.txt` file can still be useful for specific development environments or for reference.
 
 4.  **Install Tesseract OCR**:
     This application uses Tesseract OCR for processing scanned documents. You need to install Tesseract on your system.
@@ -123,7 +137,7 @@ Ensure your virtual environment is activated and Tesseract OCR is installed befo
 To process a single PDF file, use the `main.py` script located in the `pdf2text` directory:
 
 ```bash
-python pdf2text/main.py <path_to_your_pdf_file.pdf> [options]
+pdf2text-agent <path_to_your_pdf_file.pdf> [options]
 ```
 
 **Common Options**:
@@ -146,15 +160,15 @@ python pdf2text/main.py <path_to_your_pdf_file.pdf> [options]
 
 *   Process a PDF with default settings:
     ```bash
-    python pdf2text/main.py documents/report.pdf
+    pdf2text-agent documents/report.pdf
     ```
 *   Process a scanned PDF in quality mode and save only as a text file:
     ```bash
-    python pdf2text/main.py scans/image_based.pdf --mode quality --output text
+    pdf2text-agent scans/image_based.pdf --mode quality --output text
     ```
 *   Process a German PDF using OCR and save both text and JSON:
     ```bash
-    python pdf2text/main.py invoices/invoice_de.pdf --language deu --output both
+    pdf2text-agent invoices/invoice_de.pdf --language deu --output both
     ```
 
 ### Batch Processing Multiple PDFs
@@ -162,11 +176,11 @@ python pdf2text/main.py <path_to_your_pdf_file.pdf> [options]
 To process all PDF files within a specific directory:
 
 ```bash
-python pdf2text/main.py <path_to_your_pdf_directory> --batch
+pdf2text-agent <path_to_your_pdf_directory> --batch
 ```
 You can combine batch processing with other options like `--mode` or `--output`:
 ```bash
-python pdf2text/main.py path/to/pdfs/ --batch --mode fast --output json
+pdf2text-agent path/to/pdfs/ --batch --mode fast --output json
 ```
 
 ### Running the Stress Test Tool

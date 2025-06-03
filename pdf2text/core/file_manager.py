@@ -20,12 +20,9 @@ from contextlib import contextmanager
 import sys
 
 # Ensure the root directory is on the import path
-
-sys.path.append(str(Path(__file__).resolve().parent.parent))
-from config import get_config
-
-
-from .memory_manager import get_memory_manager, ManagedResource, CleanupPriority
+# sys.path.append(str(Path(__file__).resolve().parent.parent)) # Removed for packaging
+from pdf2text.config import get_config
+from pdf2text.core.memory_manager import get_memory_manager, ManagedResource, CleanupPriority
 
 
 class FileType(Enum):
