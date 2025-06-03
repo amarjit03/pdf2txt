@@ -10,17 +10,17 @@ from dataclasses import dataclass
 from enum import Enum
 import logging
 
-from config import get_config, ProcessingMode, OutputFormat
-from core.memory_manager import get_memory_manager, MemoryContext
-from core.file_manager import get_file_manager
-from analyzers.pdf_analyzer import PDFAnalyzer, PDFAnalysisResult, PDFType
-from analyzers.memory_estimator import MemoryEstimator
-# from extractors.text_extractor import TextExtractor, TextExtractionMode
-# from extractors.ocr_extractor import OCRExtractor, OCRQuality, ImagePreprocessing
-# from extractors.hybrid_extractor import HybridExtractor, HybridStrategy
-from extractors.text_extractors import TextExtractor, TextExtractionMode
-from extractors.ocr_extractors import OCRExtractor, OCRQuality, ImagePreprocessing
-from extractors.hybrid_extractors import HybridExtractor, HybridStrategy
+from pdf2text.config import get_config, ProcessingMode, OutputFormat
+from pdf2text.core.memory_manager import get_memory_manager, MemoryContext
+from pdf2text.core.file_manager import get_file_manager
+from pdf2text.analyzers.pdf_analyzer import PDFAnalyzer, PDFAnalysisResult, PDFType
+from pdf2text.analyzers.memory_estimator import MemoryEstimator
+# from extractors.text_extractor import TextExtractor, TextExtractionMode # Kept commented
+# from extractors.ocr_extractor import OCRExtractor, OCRQuality, ImagePreprocessing # Kept commented
+# from extractors.hybrid_extractor import HybridExtractor, HybridStrategy # Kept commented
+from pdf2text.extractors.text_extractors import TextExtractor, TextExtractionMode
+from pdf2text.extractors.ocr_extractors import OCRExtractor, OCRQuality, ImagePreprocessing
+from pdf2text.extractors.hybrid_extractors import HybridExtractor, HybridStrategy
 
 
 class ProcessingStatus(Enum):

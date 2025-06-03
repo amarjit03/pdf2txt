@@ -14,13 +14,13 @@ from pdf2image import convert_from_path
 import tempfile # For temporary image storage
 import os # For file path operations and cleanup
 
-from config import get_config
-from core.memory_manager import get_memory_manager, MemoryContext
-from analyzers.pdf_analyzer import PDFAnalysisResult, PDFType, ContentComplexity
-# from .text_extractor import TextExtractor, TextExtractionMode, TextExtractionResult
-# from .ocr_extractor import OCRExtractor, OCRQuality, ImagePreprocessing, OCRExtractionResult
-from .text_extractors import TextExtractor, TextExtractionMode, TextExtractionResult
-from .ocr_extractors import OCRExtractor, OCRQuality, ImagePreprocessing, OCRExtractionResult
+from pdf2text.config import get_config
+from pdf2text.core.memory_manager import get_memory_manager, MemoryContext
+from pdf2text.analyzers.pdf_analyzer import PDFAnalysisResult, PDFType, ContentComplexity
+# from .text_extractor import TextExtractor, TextExtractionMode, TextExtractionResult # Kept commented
+# from .ocr_extractor import OCRExtractor, OCRQuality, ImagePreprocessing, OCRExtractionResult # Kept commented
+from pdf2text.extractors.text_extractors import TextExtractor, TextExtractionMode, TextExtractionResult
+from pdf2text.extractors.ocr_extractors import OCRExtractor, OCRQuality, ImagePreprocessing, OCRExtractionResult
 
 
 class HybridStrategy(Enum):
@@ -978,7 +978,7 @@ def extract_text_hybrid_quality(file_path: Path, analysis: PDFAnalysisResult) ->
 if __name__ == "__main__":
     # Test hybrid extractor
     import sys
-    from analyzers.pdf_analyzer import PDFAnalyzer
+    from pdf2text.analyzers.pdf_analyzer import PDFAnalyzer # Changed for packaging
     
     if len(sys.argv) != 2:
         print("Usage: python hybrid_extractor.py <pdf_file>")

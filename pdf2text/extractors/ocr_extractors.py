@@ -17,10 +17,10 @@ from enum import Enum
 import logging
 import numpy as np
 
-from config import get_config
-from core.memory_manager import get_memory_manager, ManagedResource, CleanupPriority, MemoryContext
-from core.file_manager import get_file_manager
-from analyzers.pdf_analyzer import PDFAnalysisResult, PDFType
+from pdf2text.config import get_config
+from pdf2text.core.memory_manager import get_memory_manager, ManagedResource, CleanupPriority, MemoryContext
+from pdf2text.core.file_manager import get_file_manager
+from pdf2text.analyzers.pdf_analyzer import PDFAnalysisResult, PDFType
 
 
 class OCRQuality(Enum):
@@ -613,7 +613,7 @@ def extract_text_ocr_high_quality(file_path: Path, analysis: PDFAnalysisResult) 
 if __name__ == "__main__":
     # Test OCR extractor
     import sys
-    from analyzers.pdf_analyzer import PDFAnalyzer
+    from pdf2text.analyzers.pdf_analyzer import PDFAnalyzer # Changed for packaging
     
     if len(sys.argv) != 2:
         print("Usage: python ocr_extractor.py <pdf_file>")

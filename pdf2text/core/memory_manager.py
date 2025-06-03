@@ -16,12 +16,7 @@ import tempfile
 import shutil
 from pathlib import Path
 
-import sys
-
-# Ensure the root directory is on the import path
-sys.path.append(str(Path(__file__).resolve().parent.parent))
-
-from config import get_config
+from pdf2text.config import get_config
 
 
 class MemoryState(Enum):

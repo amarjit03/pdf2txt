@@ -17,11 +17,11 @@ from pathlib import Path
 from typing import List, Optional
 
 # Import our configuration
-from config import get_config, print_config_summary, OutputFormat, ProcessingMode
+from pdf2text.config import get_config, print_config_summary, OutputFormat, ProcessingMode
 
 # We'll import these as we create them in next steps
-# from core.agent import PDFTextAgent
-# from utils.logger import setup_logging
+# from pdf2text.core.agent import PDFTextAgent # Example if it were here
+# from pdf2text.utils.logger import setup_logging # Example if it were here
 
 
 def parse_arguments():
@@ -135,7 +135,7 @@ def find_pdf_files(directory: Path) -> List[Path]:
 
 def process_single_file(file_path: Path, config) -> bool:
     """Process a single PDF file using the complete agent"""
-    from core.agent import PDFTextAgent
+    from pdf2text.core.agent import PDFTextAgent # Changed for packaging
     
     print(f"\n📄 Processing: {file_path.name}")
     print(f"   Size: {file_path.stat().st_size / (1024*1024):.1f} MB")
@@ -195,7 +195,7 @@ def process_single_file(file_path: Path, config) -> bool:
 
 def process_batch(directory: Path, config) -> tuple:
     """Process all PDF files in directory using the complete agent"""
-    from core.agent import PDFTextAgent
+    from pdf2text.core.agent import PDFTextAgent # Changed for packaging
     
     pdf_files = find_pdf_files(directory)
     

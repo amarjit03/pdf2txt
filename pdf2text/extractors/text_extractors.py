@@ -591,11 +591,11 @@ import re
 import sys
 
 # Ensure the root directory is on the import path
-sys.path.append(str(Path(__file__).resolve().parent.parent))
+# sys.path.append(str(Path(__file__).resolve().parent.parent)) # Removed for packaging
 
-from config import get_config
-from core.memory_manager import get_memory_manager, ManagedResource, CleanupPriority, MemoryContext
-from analyzers.pdf_analyzer import PDFAnalysisResult, PDFType, ContentComplexity
+from pdf2text.config import get_config
+from pdf2text.core.memory_manager import get_memory_manager, ManagedResource, CleanupPriority, MemoryContext
+from pdf2text.analyzers.pdf_analyzer import PDFAnalysisResult, PDFType, ContentComplexity
 
 
 class TextExtractionMode(Enum):
@@ -1302,7 +1302,7 @@ def extract_text_with_layout(file_path: Path, analysis: PDFAnalysisResult) -> st
 if __name__ == "__main__":
     # Test text extractor
     import sys
-    from analyzers.pdf_analyzer import PDFAnalyzer
+    from pdf2text.analyzers.pdf_analyzer import PDFAnalyzer # Changed for packaging
     
     if len(sys.argv) != 2:
         print("Usage: python text_extractor.py <pdf_file>")
