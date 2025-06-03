@@ -1,0 +1,6 @@
+psutil
+PyMuPDF
+pytesseract
+pdf2image
+Pillow
+numpy

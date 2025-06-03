@@ -9,6 +9,10 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
 import logging
+import fitz # PyMuPDF
+from pdf2image import convert_from_path
+import tempfile # For temporary image storage
+import os # For file path operations and cleanup
 
 from config import get_config
 from core.memory_manager import get_memory_manager, MemoryContext
@@ -311,7 +315,7 @@ class HybridExtractor:
     
     def _process_chunk_auto(self, file_path: Path, chunk_start: int, chunk_end: int,
                            page_analysis: List[Dict]) -> Tuple[str, Dict]:
-        """Process a chunk using auto-selected methods for each page"""
+        """Process a chunk using auto-selected methods for each page with improved efficiency."""
         text_parts = []
         chunk_info = {
             'text_pages': 0,
@@ -322,136 +326,293 @@ class HybridExtractor:
         }
         
         current_method = None
-        
-        for page_num in range(chunk_start, chunk_end):
-            if page_num >= len(page_analysis):
-                continue
-            
-            page_info = page_analysis[page_num]
-            recommended_method = page_info['recommended_method']
-            
-            # Track method switches
-            if current_method and current_method != recommended_method:
-                chunk_info['method_switches'] += 1
-            current_method = recommended_method
-            
-            try:
-                if recommended_method == 'text':
-                    # Try text extraction first
-                    page_text = self._extract_single_page_text(file_path, page_num)
-                    
-                    if page_text and len(page_text.strip()) >= self.min_text_length:
+        doc: Optional[fitz.Document] = None
+        image_paths: Dict[int, Path] = {}
+        temp_dir_obj: Optional[tempfile.TemporaryDirectory] = None # Renamed to avoid conflict with module
+
+        try:
+            # Determine if text extraction or OCR might be needed for any page in the chunk
+            # We also need to consider fallbacks. If text is primary, OCR might be a fallback.
+            # If OCR is primary, text might be a fallback.
+            needs_fitz_doc = False
+            pages_needing_ocr_conversion: List[int] = []
+
+            for i in range(chunk_start, chunk_end):
+                if i < len(page_analysis):
+                    pa = page_analysis[i]
+                    if pa['recommended_method'] == 'text':
+                        needs_fitz_doc = True
+                        # If text fails, we might OCR. So, mark for OCR conversion too.
+                        pages_needing_ocr_conversion.append(i)
+                    elif pa['recommended_method'] == 'ocr':
+                        needs_fitz_doc = True # For potential fallback to text
+                        pages_needing_ocr_conversion.append(i)
+                else: # page index out of bounds for page_analysis
+                    self.logger.warning(f"Page index {i} is out of bounds for page_analysis list (len {len(page_analysis)}) during chunk planning.")
+
+
+            if needs_fitz_doc:
+                try:
+                    doc = fitz.open(str(file_path))
+                except Exception as e:
+                    self.logger.error(f"Failed to open PDF {file_path} for chunk {chunk_start}-{chunk_end}: {e}")
+                    # If doc fails to open, mark all pages in chunk as failed.
+                    for page_num_idx in range(chunk_start, chunk_end):
+                        chunk_info['failed_pages'] += 1
+                        chunk_info['page_methods'].append({
+                            'page_number': page_num_idx + 1, 'method_used': 'error',
+                            'confidence': 0.0, 'text_length': 0, 'error': f"PDF open failed: {e}"
+                        })
+                    return "", chunk_info # Early exit for this chunk
+
+            if pages_needing_ocr_conversion:
+                try:
+                    temp_dir_obj = tempfile.TemporaryDirectory(prefix="pdf2image_chunk_")
+                    temp_dir_path = Path(temp_dir_obj.name)
+
+                    # Filter pages to convert based on doc page count if doc is available
+                    if doc:
+                        valid_pages_to_convert = [p for p in pages_needing_ocr_conversion if p < doc.page_count]
+                    else: # If doc is not available (e.g. pure OCR doc type where we skip opening it)
+                        # This case should ideally be handled by analysis.page_count, but good to be safe.
+                        # However, current logic implies doc IS opened if OCR is needed for fallback.
+                        # For now, assume if pages_needing_ocr_conversion is populated, doc should be open or it's an issue.
+                        valid_pages_to_convert = pages_needing_ocr_conversion
+
+
+                    for page_to_ocr_idx in valid_pages_to_convert:
+                        # pdf2image is 1-indexed
+                        # It's often more robust to convert page by page if there are issues with ranges or specific pages
+                        try:
+                            converted_images = convert_from_path(
+                                str(file_path),
+                                first_page=page_to_ocr_idx + 1,
+                                last_page=page_to_ocr_idx + 1,
+                                dpi=self.config.processing.get("ocr_dpi", 300), # Use config or default
+                                userpw=None, # TODO: Handle passwords from analysis if encrypted
+                                output_folder=temp_dir_path,
+                                fmt="ppm", # Good for pytesseract
+                                thread_count=1 # Avoids issues with multiple small conversions
+                            )
+                            if converted_images and converted_images[0].exists():
+                                image_paths[page_to_ocr_idx] = Path(converted_images[0].filename)
+                            else:
+                                self.logger.warning(f"Page {page_to_ocr_idx+1}: convert_from_path did not return a valid image.")
+                        except Exception as conv_exc:
+                             self.logger.warning(f"Page {page_to_ocr_idx+1} conversion to image failed: {conv_exc}")
+                             # This page won't have an image for OCR.
+
+                except Exception as e:
+                    self.logger.error(f"Failed to convert PDF pages to images for chunk {chunk_start}-{chunk_end}: {e}")
+                    # Not returning, will try to process pages with what's available.
+                    # result.warnings.append(f"OCR pre-conversion failed for chunk {chunk_start}-{chunk_end}: {e}") # result not available here
+
+
+            for page_num in range(chunk_start, chunk_end):
+                if page_num >= len(page_analysis):
+                    chunk_info['failed_pages'] += 1
+                    chunk_info['page_methods'].append({'page_number': page_num + 1, 'method_used': 'error', 'confidence': 0.0, 'text_length': 0, 'error': 'Page index out of bounds for page_analysis'})
+                    continue
+                
+                page_data_from_analysis = page_analysis[page_num]
+                recommended_method = page_data_from_analysis['recommended_method']
+                
+                page_text: str = ""
+                method_used: str = "failed"
+                confidence: float = 0.0
+
+                if current_method and current_method != recommended_method:
+                    chunk_info['method_switches'] += 1
+                current_method = recommended_method
+                
+                try:
+                    if recommended_method == 'text':
+                        if doc and page_num < doc.page_count:
+                            page_obj = doc[page_num]
+                            page_text = self._extract_text_from_page_object(page_obj)
+                            if page_text and len(page_text.strip()) >= self.min_text_length:
+                                chunk_info['text_pages'] += 1
+                                method_used = 'text'
+                                confidence = 0.9 # Base confidence for primary text success
+                            else: # Text extraction failed or got too little text, try OCR fallback
+                                self.logger.info(f"Page {page_num+1}: Text extraction yielded too little text. Attempting OCR fallback.")
+                                if page_num in image_paths:
+                                    page_text = self._extract_ocr_from_image_path(image_paths[page_num])
+                                    if page_text and len(page_text.strip()) >= self.min_text_length: # Check OCR fallback output
+                                        chunk_info['ocr_pages'] += 1
+                                        method_used = 'ocr_fallback_text_failed'
+                                        confidence = self.fallback_confidence_threshold / 100.0 # Use configured fallback threshold
+                                    else: # OCR fallback also failed
+                                        chunk_info['failed_pages'] += 1
+                                else: # No image for fallback
+                                    self.logger.warning(f"Page {page_num+1}: Text extraction failed, no pre-converted image for OCR fallback.")
+                                    chunk_info['failed_pages'] += 1
+                        else: # Doc not open or page out of range for doc
+                             self.logger.warning(f"Page {page_num+1}: Skipping text extraction (doc error or page index). Trying OCR if image exists.")
+                             if page_num in image_paths: # Try OCR if text extraction wasn't possible but image exists
+                                page_text = self._extract_ocr_from_image_path(image_paths[page_num])
+                                if page_text and len(page_text.strip()) >= self.min_text_length:
+                                    chunk_info['ocr_pages'] +=1
+                                    method_used = 'ocr_direct_text_skipped'
+                                    confidence = 0.75
+                                else:
+                                    chunk_info['failed_pages'] += 1
+                             else: # No doc for text, no image for OCR
+                                chunk_info['failed_pages'] += 1
+
+                    elif recommended_method == 'ocr':
+                        if page_num in image_paths:
+                            page_text = self._extract_ocr_from_image_path(image_paths[page_num])
+                            # Use ocr_confidence_threshold for primary OCR success
+                            # Assuming _extract_ocr_from_image_path doesn't return detailed confidence yet
+                            # For now, just check if text is substantial
+                            if page_text and len(page_text.strip()) >= self.min_text_length:
+                                chunk_info['ocr_pages'] += 1
+                                method_used = 'ocr'
+                                confidence = self.ocr_confidence_threshold / 100.0 # Example: 0.7 to 0.85
+                            else: # OCR failed or got too little text, try Text fallback
+                                self.logger.info(f"Page {page_num+1}: OCR yielded too little text or failed. Attempting Text fallback.")
+                                if doc and page_num < doc.page_count:
+                                    page_obj = doc[page_num]
+                                    page_text = self._extract_text_from_page_object(page_obj)
+                                    if page_text and len(page_text.strip()) >= self.min_text_length: # Check text fallback
+                                        chunk_info['text_pages'] += 1
+                                        method_used = 'text_fallback_ocr_failed'
+                                        confidence = self.fallback_confidence_threshold / 100.0
+                                    else: # Text fallback also failed
+                                        chunk_info['failed_pages'] += 1
+                                else: # No doc for text fallback
+                                    self.logger.warning(f"Page {page_num+1}: OCR failed, no document for text fallback.")
+                                    chunk_info['failed_pages'] += 1
+                        else: # No image for OCR (conversion failed or skipped)
+                            self.logger.warning(f"Page {page_num+1}: OCR recommended, but no image available. Attempting text extraction.")
+                            if doc and page_num < doc.page_count: # Try text as last resort
+                                page_obj = doc[page_num]
+                                page_text = self._extract_text_from_page_object(page_obj)
+                                if page_text and len(page_text.strip()) >= self.min_text_length:
+                                    chunk_info['text_pages'] += 1
+                                    method_used = 'text_direct_ocr_img_missing'
+                                    confidence = 0.5 # Lower confidence
+                                else:
+                                    chunk_info['failed_pages'] += 1
+                            else: # No image for OCR, no doc for text
+                                chunk_info['failed_pages'] += 1
+
+                    if method_used != "failed" and page_text:
                         text_parts.append(page_text)
-                        chunk_info['text_pages'] += 1
-                        method_used = 'text'
-                        confidence = 0.9
-                    else:
-                        # Fallback to OCR
-                        page_text = self._extract_single_page_ocr(file_path, page_num)
-                        if page_text:
-                            text_parts.append(page_text)
-                            chunk_info['ocr_pages'] += 1
-                            method_used = 'ocr_fallback'
-                            confidence = 0.7
-                        else:
-                            chunk_info['failed_pages'] += 1
-                            method_used = 'failed'
-                            confidence = 0.0
-                
-                else:  # recommended_method == 'ocr'
-                    # Try OCR first
-                    page_text = self._extract_single_page_ocr(file_path, page_num)
-                    
-                    if page_text and len(page_text.strip()) >= self.min_text_length:
-                        text_parts.append(page_text)
-                        chunk_info['ocr_pages'] += 1
-                        method_used = 'ocr'
-                        confidence = 0.8
-                    else:
-                        # Fallback to text extraction
-                        page_text = self._extract_single_page_text(file_path, page_num)
-                        if page_text:
-                            text_parts.append(page_text)
-                            chunk_info['text_pages'] += 1
-                            method_used = 'text_fallback'
-                            confidence = 0.6
-                        else:
-                            chunk_info['failed_pages'] += 1
-                            method_used = 'failed'
-                            confidence = 0.0
-                
-                # Record method decision
-                chunk_info['page_methods'].append({
-                    'page_number': page_num + 1,
-                    'method_used': method_used,
-                    'confidence': confidence,
-                    'text_length': len(page_text) if 'page_text' in locals() else 0
-                })
-                
-            except Exception as e:
-                self.logger.warning(f"Page {page_num + 1} processing failed: {e}")
-                chunk_info['failed_pages'] += 1
-                chunk_info['page_methods'].append({
-                    'page_number': page_num + 1,
-                    'method_used': 'error',
-                    'confidence': 0.0,
-                    'text_length': 0,
-                    'error': str(e)
-                })
-        
-        chunk_text = "\n\n".join(text_parts)
-        return chunk_text, chunk_info
+
+                    chunk_info['page_methods'].append({
+                        'page_number': page_num + 1,
+                        'method_used': method_used,
+                        'confidence': confidence, # Store actual confidence if available from extractors later
+                        'text_length': len(page_text) if page_text else 0
+                    })
+
+                except Exception as e:
+                    self.logger.error(f"Page {page_num + 1} processing encountered an unhandled exception: {e}", exc_info=True)
+                    chunk_info['failed_pages'] += 1
+                    chunk_info['page_methods'].append({
+                        'page_number': page_num + 1, 'method_used': 'error',
+                        'confidence': 0.0, 'text_length': 0, 'error': str(e)
+                    })
+
+            chunk_text_result = "\n\n".join(text_parts)
+            return chunk_text_result, chunk_info
+
+        finally:
+            if doc:
+                try:
+                    doc.close()
+                except Exception as e:
+                    self.logger.warning(f"Exception when closing PDF document: {e}")
+            if temp_dir_obj:
+                try:
+                    temp_dir_obj.cleanup()
+                except Exception as e:
+                    self.logger.warning(f"Failed to cleanup temporary directory {temp_dir_obj.name}: {e}")
+
+    def _extract_text_from_page_object(self, page_obj: fitz.Page) -> str:
+        """Helper to extract text from an already loaded fitz.Page object."""
+        try:
+            text = page_obj.get_text()
+            return self._clean_text(text)
+        except Exception as e:
+            self.logger.debug(f"Text extraction from page object failed: {e}")
+            return ""
+
+    def _extract_ocr_from_image_path(self, image_path: Path) -> str:
+        """Helper to extract text from an image file using OCR."""
+        import pytesseract # Import here to keep it local if not used elsewhere frequently
+        try:
+            # OCR the image
+            text = pytesseract.image_to_string(
+                str(image_path), # pytesseract expects string path
+                lang=self.config.processing.ocr_language,
+                config='--oem 1 --psm 3' #TODO: Make configurable
+            )
+            return self._clean_text(text)
+        except Exception as e:
+            self.logger.debug(f"OCR from image path {image_path} failed: {e}")
+            return ""
     
     def _extract_single_page_text(self, file_path: Path, page_num: int) -> str:
         """Extract text from a single page using direct text extraction"""
-        import fitz
+        # This method is now largely replaced by _extract_text_from_page_object
+        # and pre-opening of doc in _process_chunk_auto.
+        # Keeping it commented out for reference during refactoring, can be deleted later.
+        # import fitz
         
-        try:
-            doc = fitz.open(str(file_path))
-            if page_num >= doc.page_count:
-                return ""
+        # try:
+        #     doc = fitz.open(str(file_path))
+        #     if page_num >= doc.page_count:
+        #         return ""
             
-            page = doc[page_num]
-            text = page.get_text()
-            doc.close()
+        #     page = doc[page_num]
+        #     text = page.get_text()
+        #     doc.close()
             
-            # Clean text
-            return self._clean_text(text)
+        #     # Clean text
+        #     return self._clean_text(text)
             
-        except Exception as e:
-            self.logger.debug(f"Single page text extraction failed for page {page_num + 1}: {e}")
-            return ""
-    
+        # except Exception as e:
+        #     self.logger.debug(f"Single page text extraction failed for page {page_num + 1}: {e}")
+        #     return ""
+        pass # Body removed
+
     def _extract_single_page_ocr(self, file_path: Path, page_num: int) -> str:
         """Extract text from a single page using OCR"""
-        import fitz
-        import pytesseract
-        from pdf2image import convert_from_path
+        # This method is now largely replaced by _extract_ocr_from_image_path
+        # and pre-conversion in _process_chunk_auto.
+        # Keeping it commented out for reference during refactoring, can be deleted later.
+        # import fitz
+        # import pytesseract
+        # from pdf2image import convert_from_path
         
-        try:
-            # Convert single page to image
-            images = convert_from_path(
-                str(file_path),
-                first_page=page_num + 1,
-                last_page=page_num + 1,
-                dpi=300
-            )
+        # try:
+        #     # Convert single page to image
+        #     images = convert_from_path(
+        #         str(file_path),
+        #         first_page=page_num + 1,
+        #         last_page=page_num + 1,
+        #         dpi=300
+        #     )
             
-            if not images:
-                return ""
+        #     if not images:
+        #         return ""
             
-            # OCR the image
-            text = pytesseract.image_to_string(
-                images[0],
-                lang=self.config.processing.ocr_language,
-                config='--oem 1 --psm 3'
-            )
+        #     # OCR the image
+        #     text = pytesseract.image_to_string(
+        #         images[0],
+        #         lang=self.config.processing.ocr_language,
+        #         config='--oem 1 --psm 3'
+        #     )
             
-            return self._clean_text(text)
+        #     return self._clean_text(text)
             
-        except Exception as e:
-            self.logger.debug(f"Single page OCR failed for page {page_num + 1}: {e}")
-            return ""
+        # except Exception as e:
+        #     self.logger.debug(f"Single page OCR failed for page {page_num + 1}: {e}")
+        #     return ""
+        pass # Body removed
     
     def _extract_text_first(self, file_path: Path, analysis: PDFAnalysisResult,
                            chunk_size: int, result: HybridExtractionResult) -> HybridExtractionResult:
