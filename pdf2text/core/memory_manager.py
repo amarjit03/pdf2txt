@@ -227,14 +227,14 @@ class MemoryManager:
     def register_resource(self, resource: ManagedResource) -> str:
         """Register a resource for memory management"""
         self.managed_resources[resource.resource_id] = resource
-        self.logger.debug(f"Registered resource: {resource.resource_id} ({resource.size_mb:.1f}MB)")
+        self.logger.debug(f"Registered resource: ID='{resource.resource_id}', Type='{resource.resource_type}', SizeMB={resource.size_mb:.1f}, Metadata={resource.metadata}. Total managed resources: {len(self.managed_resources)}")
         return resource.resource_id
     
     def unregister_resource(self, resource_id: str) -> bool:
         """Unregister a resource"""
         if resource_id in self.managed_resources:
             resource = self.managed_resources.pop(resource_id)
-            self.logger.debug(f"Unregistered resource: {resource_id}")
+            self.logger.debug(f"Unregistered resource: ID='{resource.resource_id}', Type='{resource.resource_type}', SizeMB={resource.size_mb:.1f}. Total managed resources: {len(self.managed_resources)}")
             return True
         return False
     
@@ -259,13 +259,16 @@ class MemoryManager:
         candidates.sort(key=lambda x: (x[1].priority.value, x[1].created_at))
         
         for resource_id, resource in candidates:
+            self.logger.debug(f"Attempting cleanup for resource: ID='{resource_id}', Type='{resource.resource_type}', Priority='{resource.priority.name}'")
             try:
                 if resource.cleanup_callback:
                     resource.cleanup_callback()
                     freed_mb += resource.size_mb
                     cleaned_count += 1
                     self.unregister_resource(resource_id)
-                    
+                    self.logger.info(f"Successfully cleaned up resource: ID='{resource_id}', Type='{resource.resource_type}', FreedMB={resource.size_mb:.1f}")
+                else:
+                    self.logger.debug(f"Resource ID='{resource_id}' has no cleanup_callback or was not cleaned.")
             except Exception as e:
                 self.logger.error(f"Cleanup failed for {resource_id}: {e}")
         
@@ -310,6 +313,7 @@ class MemoryManager:
         """Clean up all managed temporary directories"""
         cleaned = 0
         for temp_dir in self.temp_directories[:]:  # Copy list to avoid modification during iteration
+            self.logger.debug(f"Attempting to remove temp directory: {temp_dir}")
             try:
                 if temp_dir.exists():
                     shutil.rmtree(temp_dir)
@@ -446,11 +450,13 @@ class MemoryContext:
     
     def __enter__(self):
         self.start_snapshot = self.memory_manager.get_memory_snapshot()
+        self.memory_manager.logger.debug(f"MemoryContext '{self.operation_name}' entering: ProcessMB={self.start_snapshot.process_mb:.1f}, AvailableMB={self.start_snapshot.available_mb:.1f}, SysUsagePercent={self.start_snapshot.percentage:.1f}%")
         
         # Check if we have enough memory
         if self.estimated_mb > 0 and not self.memory_manager.check_can_allocate(self.estimated_mb):
             # Try to free memory
             if not self.memory_manager.wait_for_memory(self.estimated_mb, timeout_seconds=10):
+                self.memory_manager.logger.warning(f"MemoryContext '{self.operation_name}': Insufficient memory after waiting. RequiredMB={self.estimated_mb:.1f}, StartProcessMB={self.start_snapshot.process_mb:.1f}, AvailableMB={self.memory_manager.get_memory_snapshot().available_mb:.1f}")
                 raise MemoryError(f"Insufficient memory for {self.operation_name}: need {self.estimated_mb:.1f}MB")
         
         return self
@@ -462,9 +468,13 @@ class MemoryContext:
         
         # Force cleanup if memory pressure increased significantly
         end_snapshot = self.memory_manager.get_memory_snapshot()
-        memory_increase = end_snapshot.percentage - self.start_snapshot.percentage
+        memory_increase_mb = end_snapshot.process_mb - self.start_snapshot.process_mb
+        self.memory_manager.logger.debug(f"MemoryContext '{self.operation_name}' exiting: StartProcessMB={self.start_snapshot.process_mb:.1f}, EndProcessMB={end_snapshot.process_mb:.1f}, DiffMB={memory_increase_mb:.1f}. SysUsagePercent={end_snapshot.percentage:.1f}%, AvailableMB={end_snapshot.available_mb:.1f}")
+
+        memory_increase = end_snapshot.percentage - self.start_snapshot.percentage # This is system percentage increase
         
         if memory_increase > 10:  # More than 10% increase
+            self.memory_manager.logger.info(f"MemoryContext '{self.operation_name}': Significant memory increase (System usage {memory_increase:.1f} percentage points, ProcessMB from {self.start_snapshot.process_mb:.1f} to {end_snapshot.process_mb:.1f}). Triggering medium cleanup.")
             self.memory_manager._trigger_cleanup(CleanupPriority.MEDIUM)
             self.memory_manager.force_garbage_collection()
     
