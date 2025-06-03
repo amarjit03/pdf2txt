@@ -2,6 +2,17 @@
 
 The PDF-to-Text Agent is a Python application designed to extract textual content from various types of PDF documents. It intelligently analyzes PDFs to determine if they are text-based, scanned (image-based), or mixed, and then applies the optimal extraction strategy. The agent incorporates memory management techniques to handle large files efficiently and provides options for different processing modes and output formats.
 
+## Table of Contents
+
+*   [Features](#features)
+*   [Quick Start](#quick-start)
+*   [Directory Structure](#directory-structure)
+*   [Setup and Installation](#setup-and-installation)
+*   [Usage](#usage)
+*   [Configuration](#configuration)
+*   [Contributing](#contributing)
+*   [License](#license)
+
 ## Features
 
 *   **Versatile PDF Handling**: Supports text-based, scanned (OCR), and mixed PDF documents.
@@ -13,6 +24,44 @@ The PDF-to-Text Agent is a Python application designed to extract textual conten
 *   **Customizable Configuration**: Core settings (memory limits, OCR language, output paths, etc.) are configurable via `pdf2text/config.py` and command-line arguments.
 *   **Stress Testing Tool**: Includes `tools/stress_test.py` for performance testing and aiding in the detection of potential memory leaks.
 *   **Detailed Logging**: Provides comprehensive logs for monitoring and troubleshooting.
+
+## Quick Start
+
+This guide will get you up and running with the PDF-to-Text Agent quickly.
+
+1.  **Prerequisites**:
+    *   Python 3.7+ installed.
+    *   pip (Python package installer) installed.
+    *   Tesseract OCR installed (see [Setup and Installation](#setup-and-installation) for details).
+
+2.  **Clone & Setup**:
+    ```bash
+    # Clone the repository (if you haven't already)
+    # git clone <repository_url>
+    # cd <repository_directory>
+
+    # Create and activate a virtual environment
+    python -m venv .venv
+    # On Windows:
+    # .venv\Scripts\activate
+    # On macOS/Linux:
+    source .venv/bin/activate
+
+    # Install the package and dependencies
+    pip install .
+    ```
+
+3.  **Run on a Sample PDF**:
+    The project includes a sample PDF. Try converting it:
+    ```bash
+    pdf2text-agent pdf2text/sample_pdf/sample.pdf
+    ```
+    This will process `sample.pdf` using default settings (balanced mode, outputting both text and JSON files) and save the results in the `pdf2text/output/` directory.
+
+4.  **Check the Output**:
+    Look for `sample_extracted.txt` and `sample_extracted.json` in `pdf2text/output/text_files/` and `pdf2text/output/json_files/` respectively.
+
+For more detailed instructions, options, and batch processing, please refer to the [Usage](#usage) section.
 
 ## Directory Structure
 
@@ -60,12 +109,13 @@ The PDF-to-Text Agent is a Python application designed to extract textual conten
 
 Follow these steps to set up and run the PDF-to-Text Agent:
 
-1.  **Clone the Repository (Example)**:
+1.  **Get the Code**: If you haven't done so already (e.g., via the Quick Start), clone the repository or download the source code.
     ```bash
+    # Example for cloning:
     # git clone <repository_url> # Replace with actual URL if hosted
     # cd <repository_directory>
     ```
-    (Note: If you have the files locally, navigate to the project's root directory.)
+    If you have the files locally, navigate to the project's root directory.
 
 2.  **Create a Python Virtual Environment** (Recommended):
     ```bash
@@ -132,33 +182,39 @@ Follow these steps to set up and run the PDF-to-Text Agent:
 
 Ensure your virtual environment is activated and Tesseract OCR is installed before running the agent.
 
-### Processing a Single PDF
+### Command-line Interface
 
-To process a single PDF file, use the `main.py` script located in the `pdf2text` directory:
+The PDF-to-Text Agent is run from the command line using the `pdf2text-agent` command (once the package is installed).
+The basic command structure is:
 
 ```bash
-pdf2text-agent <path_to_your_pdf_file.pdf> [options]
+pdf2text-agent <input_path_or_dir> [options]
 ```
+
+*   `<input_path_or_dir>`: This is a positional argument. It should be the path to a single PDF file, or if the `--batch` option is used, it should be the path to a directory containing PDF files.
 
 **Common Options**:
 
+The following options are available to customize the processing:
+
 *   `--mode [fast|balanced|quality]`: Sets the processing mode.
-    *   `fast`: Prioritizes speed over extraction accuracy.
-    *   `balanced`: Offers a balance between speed and accuracy (default).
-    *   `quality`: Prioritizes the highest possible extraction accuracy, which may be slower.
+    *   `fast`: Prioritizes speed over extraction accuracy. Useful for quick previews or when OCR quality is less critical.
+    *   `balanced`: Offers a balance between speed and accuracy. This is the default mode.
+    *   `quality`: Prioritizes the highest possible extraction accuracy, which may be slower. Recommended for documents requiring careful OCR.
 *   `--output [text|json|both]`: Specifies the output format.
-    *   `text`: Saves a plain `.txt` file.
-    *   `json`: Saves a detailed `.json` file with extracted content and metadata.
-    *   `both`: Saves both `.txt` and `.json` files (default).
-*   `--language <language_code>`: Specifies the language(s) for OCR (e.g., `eng` for English, `deu` for German, `eng+fra` for English and French). Default is `eng`.
-*   `--output-dir <directory_path>`: Specify a custom base directory for output files. (Note: This argument might need to be added to `main.py` if not already present; assuming it or a similar mechanism via `config.py` exists).
-*   `--memory-limit <MB>`: Overrides the maximum memory (in MB) the application should attempt to use.
-*   `--verbose` or `-v`: Enables verbose logging, providing more detailed output about the processing steps.
-*   `--config`: Displays the current configuration settings and exits.
+    *   `text`: Saves a plain `.txt` file containing the extracted text.
+    *   `json`: Saves a detailed `.json` file with extracted content, metadata, and processing information.
+    *   `both`: Saves both `.txt` and `.json` files. This is the default.
+*   `--language <language_code>`: Specifies the language(s) for OCR (Optical Character Recognition). For example, use `eng` for English, `deu` for German, or `eng+fra` for English and French. The default is `eng`.
+*   `--memory-limit <MB>`: Overrides the maximum memory (in Megabytes) the application should attempt to use. This can be useful for processing very large files or in memory-constrained environments.
+*   `--verbose` or `-v`: Enables verbose logging, providing more detailed output about the processing steps, including configuration details and memory usage.
+*   `--config`: Displays the current configuration settings (derived from `pdf2text/config.py` and any command-line overrides) and then exits without processing any files.
+
+Output files are saved in the `pdf2text/output/` directory by default. This can be configured in `pdf2text/config.py`.
 
 **Examples**:
 
-*   Process a PDF with default settings:
+*   Process a single PDF with default settings (balanced mode, output both text and JSON):
     ```bash
     pdf2text-agent documents/report.pdf
     ```
@@ -166,22 +222,33 @@ pdf2text-agent <path_to_your_pdf_file.pdf> [options]
     ```bash
     pdf2text-agent scans/image_based.pdf --mode quality --output text
     ```
-*   Process a German PDF using OCR and save both text and JSON:
+*   Process a German PDF using OCR (default output is both text and JSON):
     ```bash
-    pdf2text-agent invoices/invoice_de.pdf --language deu --output both
+    pdf2text-agent invoices/invoice_de.pdf --language deu
+    ```
+*   Display the current configuration:
+    ```bash
+    pdf2text-agent --config
+    ```
+*   Process a PDF with verbose output:
+    ```bash
+    pdf2text-agent important_document.pdf --verbose
     ```
 
 ### Batch Processing Multiple PDFs
 
-To process all PDF files within a specific directory:
+To process all PDF files within a specific directory, use the `--batch` flag along with the directory path.
 
 ```bash
-pdf2text-agent <path_to_your_pdf_directory> --batch
+pdf2text-agent <path_to_your_pdf_directory> --batch [options]
 ```
+
 You can combine batch processing with other options like `--mode` or `--output`:
-```bash
-pdf2text-agent path/to/pdfs/ --batch --mode fast --output json
-```
+
+*   Process all PDFs in the `project_files/reports/` directory using fast mode and saving only JSON output:
+    ```bash
+    pdf2text-agent project_files/reports/ --batch --mode fast --output json
+    ```
 
 ### Running the Stress Test Tool
 
@@ -229,4 +296,4 @@ We appreciate your help in making this tool better!
 
 ## License
 
-This project is licensed under the MIT License - see the `LICENSE.md` file for details (if available).
+This project is licensed under the MIT License.
